@@ -30,6 +30,9 @@ env:
   VCPKG_COMMIT_ID: "120deac3062162151622ca4860575a33844ba10b"
   VERSION: "1.4.9"
   NDK_VERSION: "r28c"
+  # Lifted to env so the `if:` guards below can test it — secrets are not
+  # readable from `if:` expressions directly.
+  ANDROID_SIGNING_KEY: "${{ secrets.ANDROID_SIGNING_KEY }}"
 
 jobs:
   generate-bridge:
@@ -173,6 +176,40 @@ jobs:
           popd
           mkdir -p out
           mv flutter/build/app/outputs/flutter-apk/app-${ABI}-release.apk out/nks-remote-${{ env.VERSION }}-${{ inputs.arch }}.apk
+          ls -la out
+
+      # Gradle above signs with the debug key (upstream does the same); the
+      # release keystore is applied here to the finished APK, so a fork without
+      # the secret still produces an installable debug-signed build.
+      - name: Setup sign tool version variable
+        if: env.ANDROID_SIGNING_KEY != null
+        shell: bash
+        run: |
+          BUILD_TOOL_VERSION=$(ls /usr/local/lib/android/sdk/build-tools/ | tail -n 1)
+          echo "ANDROID_SIGN_TOOL_VERSION=$BUILD_TOOL_VERSION" >> $GITHUB_ENV
+          echo "Last build tool version is: $BUILD_TOOL_VERSION"
+
+      - uses: r0adkll/sign-android-release@349ebdef58775b1e0d8099458af0816dc79b6407 # v1
+        name: Sign app APK
+        if: env.ANDROID_SIGNING_KEY != null
+        id: sign-apk
+        with:
+          releaseDirectory: ./out
+          signingKeyBase64: ${{ secrets.ANDROID_SIGNING_KEY }}
+          alias: ${{ secrets.ANDROID_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: ${{ env.ANDROID_SIGN_TOOL_VERSION }}
+
+      # Leave exactly one APK behind, so nobody ships the debug-signed one by
+      # picking the wrong file out of the artifact.
+      - name: Keep only the signed APK
+        if: env.ANDROID_SIGNING_KEY != null
+        shell: bash
+        run: |
+          mv "${{ steps.sign-apk.outputs.signedReleaseFile }}" \
+             out/nks-remote-${{ env.VERSION }}-${{ inputs.arch }}.apk
           ls -la out
 
       - name: Upload APK
