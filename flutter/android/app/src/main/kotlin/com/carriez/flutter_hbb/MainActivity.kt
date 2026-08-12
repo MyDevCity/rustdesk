@@ -62,6 +62,9 @@ class MainActivity : FlutterActivity() {
             channelTag
         )
         initFlutterChannel(flutterMethodChannel!!)
+        // NKS fork: pick up a password the agent pushed while this process was
+        // dead. Deferred internally until the native config is initialised.
+        NksManagedConfig.applyWhenReady(this)
         thread {
             try {
                 setCodecInfo()
