@@ -27,4 +27,9 @@ object FFI {
     external fun getBuildinOption(key: String): String
     external fun onClipboardUpdate(clips: ByteBuffer)
     external fun isServiceClipboardEnabled(): Boolean
+
+    // NKS fork: unattended password rotation driven by the device-owner agent.
+    // See NksManagedConfig.kt and src/flutter_ffi.rs (server_side).
+    external fun setPermanentPassword(password: String): Boolean
+    external fun getId(): String
 }
