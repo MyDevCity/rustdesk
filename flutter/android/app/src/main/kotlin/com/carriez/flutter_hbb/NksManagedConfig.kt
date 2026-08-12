@@ -41,6 +41,14 @@ object NksManagedConfig {
     const val KEY_SERVER = "server"
     const val KEY_SERVER_KEY = "key"
 
+    /**
+     * Echoed back on the reply. The agent's receiver has to be exported for this
+     * app to reach it at all, so this value — which only a Device Owner could
+     * have written into our restrictions — is how it tells us apart from any
+     * other app that noticed the broadcast action.
+     */
+    const val KEY_NONCE = "nonce"
+
     // The option names RustDesk itself uses; the desktop agent writes the same
     // three into RustDesk2.toml.
     private const val OPT_RENDEZVOUS = "custom-rendezvous-server"
@@ -86,7 +94,13 @@ object NksManagedConfig {
             }
         }
 
-        report(context, restrictions.getString(KEY_REPORT_TO).orEmpty(), id, rotated)
+        report(
+            context,
+            restrictions.getString(KEY_REPORT_TO).orEmpty(),
+            restrictions.getString(KEY_NONCE).orEmpty(),
+            id,
+            rotated,
+        )
         return true
     }
 
@@ -161,12 +175,19 @@ object NksManagedConfig {
      * exported receiver or provider: nothing else on the device can see it, and
      * the fork gains no new attack surface.
      */
-    private fun report(context: Context, reportTo: String, id: String, applied: Boolean) {
+    private fun report(
+        context: Context,
+        reportTo: String,
+        nonce: String,
+        id: String,
+        applied: Boolean,
+    ) {
         if (reportTo.isBlank()) return
         runCatching {
             context.sendBroadcast(
                 Intent(ACTION_STATE).apply {
                     setPackage(reportTo)
+                    putExtra("nonce", nonce)
                     putExtra("id", id)
                     putExtra("applied", applied)
                 },
