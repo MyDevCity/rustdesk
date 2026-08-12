@@ -94,6 +94,18 @@
             android:name=".FloatingWindowService"
             android:enabled="true" />
 
+        <!-- NKS fork: managed-configuration channel used by the device-owner
+             agent to rotate the unattended password. Not exported — only the
+             system delivers this action, and only a Device Owner can set the
+             restrictions that trigger it. -->
+        <receiver
+            android:name=".NksManagedConfigReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.APPLICATION_RESTRICTIONS_CHANGED" />
+            </intent-filter>
+        </receiver>
+
         <!--
  Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java
