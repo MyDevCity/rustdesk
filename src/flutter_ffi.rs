@@ -3167,4 +3167,40 @@ pub mod server_side {
     ) -> jboolean {
         jboolean::from(crate::server::is_clipboard_service_ok())
     }
+
+    // --- NKS fork additions -------------------------------------------------
+    //
+    // A managed terminal has nobody in front of it to type a password into the
+    // UI, and the unattended password has to rotate after every support session.
+    // Desktop does this with `rustdesk --password`; Android has no CLI, so the
+    // same two operations are exposed over the JNI bridge the app already uses.
+    // Both call straight into existing logic — no new behaviour, just a caller.
+
+    /// Sets the unattended ("permanent") password. Same path as the desktop
+    /// `--password` flag. Returns false if the string could not be read or the
+    /// password was rejected (e.g. too short), so the caller can report it
+    /// rather than assume a rotation that never happened.
+    #[no_mangle]
+    pub unsafe extern "system" fn Java_ffi_FFI_setPermanentPassword(
+        env: JNIEnv,
+        _class: JClass,
+        password: JString,
+    ) -> jboolean {
+        let mut env = env;
+        let ok = if let Ok(password) = env.get_string(&password) {
+            let password: String = password.into();
+            super::main_set_permanent_password_with_result(password)
+        } else {
+            false
+        };
+        jboolean::from(ok)
+    }
+
+    /// This device's RustDesk ID. Empty until the config is initialised, which
+    /// the caller uses as its readiness probe.
+    #[no_mangle]
+    pub unsafe extern "system" fn Java_ffi_FFI_getId(env: JNIEnv, _class: JClass) -> jstring {
+        let mut env = env;
+        return env.new_string(super::get_id()).unwrap_or_default().into_raw();
+    }
 }
