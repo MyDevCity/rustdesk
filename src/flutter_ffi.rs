@@ -3203,4 +3203,24 @@ pub mod server_side {
         let mut env = env;
         return env.new_string(super::get_id()).unwrap_or_default().into_raw();
     }
+
+    /// Sets a client option — used for `custom-rendezvous-server`, `relay-server`
+    /// and `key`, so the managing agent can point this device at our own relay.
+    ///
+    /// Deliberately `main_set_option` and not a raw config write: that function
+    /// already restarts the rendezvous mediator when the server changes, which is
+    /// what makes the device re-register instead of silently staying on the old
+    /// one until next launch.
+    #[no_mangle]
+    pub unsafe extern "system" fn Java_ffi_FFI_setOption(
+        env: JNIEnv,
+        _class: JClass,
+        key: JString,
+        value: JString,
+    ) {
+        let mut env = env;
+        if let (Ok(key), Ok(value)) = (env.get_string(&key), env.get_string(&value)) {
+            super::main_set_option(key.into(), value.into());
+        }
+    }
 }
