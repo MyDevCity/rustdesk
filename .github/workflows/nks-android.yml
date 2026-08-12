@@ -1,0 +1,182 @@
+name: NKS Android build
+
+# Android-only, on-demand build of this fork.
+#
+# Upstream's flutter-build.yml is a 92KB reusable workflow whose only inputs are
+# upload-artifact/upload-tag — calling it builds Windows, macOS, iOS, Linux,
+# flatpak and web as well, and fails on signing secrets we do not have. So the
+# `build-rustdesk-android` job is lifted here, reduced to one ABI by default and
+# ending at an artifact upload instead of a GitHub release.
+#
+# UPGRADE NOTE: this is a copy, so it can go stale. When rebasing onto a new
+# upstream tag, diff upstream's `build-rustdesk-android` job against this file
+# and re-copy if the steps moved. (Upstream has the same coupling with
+# flutter/build_fdroid.sh and says so at the top of flutter-build.yml.)
+
+on:
+  workflow_dispatch:
+    inputs:
+      arch:
+        description: "Target ABI"
+        type: choice
+        default: aarch64
+        options: [aarch64, armv7, x86_64]
+
+env:
+  RUST_VERSION: "1.75"
+  CARGO_NDK_VERSION: "3.1.2"
+  ANDROID_FLUTTER_VERSION: "3.24.5"
+  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+  VCPKG_COMMIT_ID: "120deac3062162151622ca4860575a33844ba10b"
+  VERSION: "1.4.9"
+  NDK_VERSION: "r28c"
+
+jobs:
+  generate-bridge:
+    uses: ./.github/workflows/bridge.yml
+
+  build-android:
+    needs: [generate-bridge]
+    name: build rustdesk android apk ${{ inputs.arch }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
+        with:
+          tool-cache: false
+          android: false
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
+      - name: Resolve target triple
+        run: |
+          case "${{ inputs.arch }}" in
+            aarch64) echo "TARGET=aarch64-linux-android"    >> $GITHUB_ENV
+                     echo "ABI=arm64-v8a"                   >> $GITHUB_ENV
+                     echo "NDK_SCRIPT=ndk_arm64.sh"         >> $GITHUB_ENV
+                     echo "SYSROOT_DIR=aarch64-linux-android" >> $GITHUB_ENV
+                     echo "FLUTTER_PLATFORM=android-arm64"  >> $GITHUB_ENV ;;
+            armv7)   echo "TARGET=armv7-linux-androideabi"  >> $GITHUB_ENV
+                     echo "ABI=armeabi-v7a"                 >> $GITHUB_ENV
+                     echo "NDK_SCRIPT=ndk_arm.sh"           >> $GITHUB_ENV
+                     echo "SYSROOT_DIR=arm-linux-androideabi" >> $GITHUB_ENV
+                     echo "FLUTTER_PLATFORM=android-arm"    >> $GITHUB_ENV ;;
+            x86_64)  echo "TARGET=x86_64-linux-android"     >> $GITHUB_ENV
+                     echo "ABI=x86_64"                      >> $GITHUB_ENV
+                     echo "NDK_SCRIPT=ndk_x64.sh"           >> $GITHUB_ENV
+                     echo "SYSROOT_DIR=x86_64-linux-android" >> $GITHUB_ENV
+                     echo "FLUTTER_PLATFORM=android-x64"    >> $GITHUB_ENV ;;
+          esac
+
+      - name: Export GitHub Actions cache environment variables
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410 # v6
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+               clang cmake curl gcc-multilib git g++ g++-multilib \
+               libayatana-appindicator3-dev libasound2-dev libc6-dev libclang-dev \
+               libunwind-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+               libgtk-3-dev libpam0g-dev libpulse-dev libva-dev \
+               libxcb-randr0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+               libxdo-dev libxfixes-dev llvm-dev nasm ninja-build \
+               openjdk-17-jdk-headless pkg-config tree wget
+
+      - name: Checkout source code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: recursive
+
+      - name: Install flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          channel: "stable"
+          flutter-version: ${{ env.ANDROID_FLUTTER_VERSION }}
+
+      - name: Patch flutter
+        run: |
+          cd $(dirname $(dirname $(which flutter)))
+          [[ "3.24.5" == ${{env.ANDROID_FLUTTER_VERSION}} ]] && git apply ${{ github.workspace }}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff
+
+      - uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1
+        id: setup-ndk
+        with:
+          ndk-version: ${{ env.NDK_VERSION }}
+          add-to-path: true
+
+      - name: Setup vcpkg with Github Actions binary cache
+        uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2 # v11
+        with:
+          vcpkgDirectory: /opt/artifacts/vcpkg
+          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+          doNotCache: false
+
+      - name: Install vcpkg dependencies
+        shell: bash
+        run: |
+          if ! ./flutter/build_android_deps.sh "${ABI}"; then
+            find "${VCPKG_ROOT}/" -name "*.log" | while read -r _1; do
+              echo "$_1:"; echo "======"; cat "$_1"; echo "======"; echo ""
+            done
+            exit 1
+          fi
+
+      - name: Restore bridge files
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: bridge-artifact
+          path: ./
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          components: "rustfmt"
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          prefix-key: rustdesk-lib-cache-android
+          key: ${{ env.TARGET }}
+
+      - name: Build rustdesk lib
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          rustup target add ${TARGET}
+          cargo install cargo-ndk --version ${{ env.CARGO_NDK_VERSION }} --locked
+          ./flutter/${NDK_SCRIPT}
+          mkdir -p ./flutter/android/app/src/main/jniLibs/${ABI}
+          cp ./target/${TARGET}/release/liblibrustdesk.so ./flutter/android/app/src/main/jniLibs/${ABI}/librustdesk.so
+
+      - name: Build rustdesk
+        shell: bash
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+        run: |
+          export PATH=/usr/lib/jvm/java-17-openjdk-amd64/bin:$PATH
+          sed -i "s/org.gradle.jvmargs=-Xmx1024M/org.gradle.jvmargs=-Xmx2g/g" ./flutter/android/gradle.properties
+          # No release keystore on this fork yet — upstream does the same fallback.
+          sed -i "s/signingConfigs.release/signingConfigs.debug/g" ./flutter/android/app/build.gradle
+          cp ${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/${SYSROOT_DIR}/libc++_shared.so ./flutter/android/app/src/main/jniLibs/${ABI}/
+          pushd flutter
+          flutter build apk --release --target-platform ${FLUTTER_PLATFORM} --split-per-abi
+          popd
+          mkdir -p out
+          mv flutter/build/app/outputs/flutter-apk/app-${ABI}-release.apk out/nks-remote-${{ env.VERSION }}-${{ inputs.arch }}.apk
+          ls -la out
+
+      - name: Upload APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nks-remote-${{ env.VERSION }}-${{ inputs.arch }}
+          path: out/*.apk
