@@ -10,8 +10,8 @@ import ffi.FFI
 import kotlin.concurrent.thread
 
 /**
- * Lets a managing agent rotate this device's unattended password without a human
- * at the screen.
+ * Lets a managing agent point this device at our own relay and rotate its
+ * unattended password, without a human at the screen.
  *
  * A store terminal is unattended by definition, and the platform hands an
  * operator a single-use password for each support session — so the password has
@@ -26,6 +26,8 @@ import kotlin.concurrent.thread
  *
  * Keys (all optional; absent means "leave alone"):
  * - `password`  — the new unattended password
+ * - `server`    — rendezvous/relay host
+ * - `key`       — that server's public key, to pin
  * - `reportTo`  — package of the managing agent, to send the outcome back to
  */
 object NksManagedConfig {
@@ -36,38 +38,88 @@ object NksManagedConfig {
 
     const val KEY_PASSWORD = "password"
     const val KEY_REPORT_TO = "reportTo"
+    const val KEY_SERVER = "server"
+    const val KEY_SERVER_KEY = "key"
 
-    /** Broadcast sent back to the managing agent once a rotation settles. */
+    // The option names RustDesk itself uses; the desktop agent writes the same
+    // three into RustDesk2.toml.
+    private const val OPT_RENDEZVOUS = "custom-rendezvous-server"
+    private const val OPT_RELAY = "relay-server"
+    private const val OPT_KEY = "key"
+
+    /** Broadcast sent back to the managing agent. */
     const val ACTION_STATE = "com.nkspos.uem.RUSTDESK_STATE"
 
     /**
-     * Applies whatever the agent has pushed. Safe to call repeatedly: a password
-     * that is already live is skipped, because the restrictions-changed
-     * broadcast fires for any key and re-setting would churn the config.
+     * Applies whatever the agent has pushed, and always answers with this
+     * device's id when it has somewhere to answer to.
+     *
+     * The id is reported even when there is nothing to apply. An agent cannot
+     * report a device to the platform until it knows the id, and it will not
+     * send a password until the platform knows the device — so a version that
+     * only answered when handed a password deadlocked, with each side waiting
+     * for the other. Found on an emulator; it would have been every terminal.
      */
     fun apply(context: Context): Boolean {
         val restrictions = restrictionsOf(context) ?: return false
+
+        // An empty id means the native config is not initialised yet, so neither
+        // applying nor reporting would mean anything. Let applyWhenReady retry.
+        val id = FFI.getId()
+        if (id.isEmpty()) return false
+
+        applyServer(
+            restrictions.getString(KEY_SERVER).orEmpty(),
+            restrictions.getString(KEY_SERVER_KEY).orEmpty(),
+        )
+
         val password = restrictions.getString(KEY_PASSWORD).orEmpty()
-        if (password.isBlank()) return false
-
         val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (prefs.getString(KEY_APPLIED, "") == password) return true
-
-        // An empty id means the native config is not initialised yet, and
-        // setting a password now would write it somewhere the server never
-        // reads. Report nothing and let the retry in applyWhenReady catch it.
-        if (FFI.getId().isEmpty()) {
-            Log.i(TAG, "native config not ready; deferring password rotation")
-            return false
+        // Skip a password that is already live: the restrictions-changed
+        // broadcast fires for any key, and re-setting would churn the config.
+        val rotated = when {
+            password.isBlank() -> false
+            prefs.getString(KEY_APPLIED, "") == password -> true
+            else -> FFI.setPermanentPassword(password).also { ok ->
+                if (ok) prefs.edit().putString(KEY_APPLIED, password).apply()
+                Log.i(TAG, "password rotation applied=$ok")
+            }
         }
 
-        val ok = FFI.setPermanentPassword(password)
-        if (ok) {
-            prefs.edit().putString(KEY_APPLIED, password).apply()
+        report(context, restrictions.getString(KEY_REPORT_TO).orEmpty(), id, rotated)
+        return true
+    }
+
+    /**
+     * Points the client at our relay. Written through RustDesk's own option
+     * setter, which restarts the rendezvous mediator when the server changes —
+     * without that the device keeps talking to the previous server until it is
+     * next launched.
+     */
+    private fun applyServer(server: String, serverKey: String) {
+        if (server.isNotBlank()) {
+            FFI.setOption(OPT_RENDEZVOUS, server)
+            FFI.setOption(OPT_RELAY, server)
         }
-        Log.i(TAG, "password rotation applied=$ok")
-        report(context, restrictions.getString(KEY_REPORT_TO).orEmpty(), ok)
-        return ok
+        if (serverKey.isNotBlank()) FFI.setOption(OPT_KEY, serverKey)
+    }
+
+    /**
+     * Applies the relay baked in at build time, but only if nothing has set one
+     * yet.
+     *
+     * Without this a freshly installed client registers with RustDesk's public
+     * servers until the agent's first push lands — a terminal briefly reachable
+     * through infrastructure we do not run. The managed config always wins
+     * afterwards, so the platform still owns server identity and a rebuilt
+     * server is still self-healing.
+     */
+    fun applyBootstrap(context: Context) {
+        val server = context.getString(R.string.nks_default_rendezvous_server)
+        if (server.isBlank()) return
+        if (FFI.getLocalOption(OPT_RENDEZVOUS).isNotBlank()) return
+        applyServer(server, context.getString(R.string.nks_default_rendezvous_key))
+        Log.i(TAG, "bootstrapped rendezvous server to $server")
     }
 
     /**
@@ -84,9 +136,14 @@ object NksManagedConfig {
         val app = context.applicationContext
         thread(isDaemon = true) {
             repeat(30) {
-                if (apply(app)) return@thread
+                if (FFI.getId().isNotEmpty()) {
+                    applyBootstrap(app)
+                    apply(app)
+                    return@thread
+                }
                 Thread.sleep(500)
             }
+            Log.w(TAG, "native config never became ready; nothing applied")
         }
     }
 
@@ -97,23 +154,24 @@ object NksManagedConfig {
         }.getOrNull()
 
     /**
-     * Tells the agent the outcome and this device's id, so it can report the
-     * pair to the platform.
+     * Tells the agent this device's id and whether a rotation landed, so it can
+     * report the pair to the platform.
      *
      * Explicit intent at a package the Device Owner named, rather than an
      * exported receiver or provider: nothing else on the device can see it, and
      * the fork gains no new attack surface.
      */
-    private fun report(context: Context, reportTo: String, applied: Boolean) {
+    private fun report(context: Context, reportTo: String, id: String, applied: Boolean) {
         if (reportTo.isBlank()) return
         runCatching {
             context.sendBroadcast(
                 Intent(ACTION_STATE).apply {
                     setPackage(reportTo)
-                    putExtra("id", FFI.getId())
+                    putExtra("id", id)
                     putExtra("applied", applied)
                 },
             )
+            Log.i(TAG, "reported id=$id applied=$applied to $reportTo")
         }.onFailure { Log.w(TAG, "could not report to $reportTo: ${it.message}") }
     }
 }
