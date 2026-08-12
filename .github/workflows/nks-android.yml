@@ -30,6 +30,10 @@ on:
         description: "Upload to the NKS download CDN"
         type: boolean
         default: false
+      rendezvous_server:
+        description: "Relay baked in as the bootstrap (before the agent pushes one)"
+        type: string
+        default: "rs.nkspos.com"
 
 env:
   RUST_VERSION: "1.75"
@@ -112,6 +116,35 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           submodules: recursive
+
+      # The bootstrap relay only covers the window before the managing agent's
+      # first push; without it a fresh client registers with RustDesk's public
+      # servers. Injected at build time rather than committed, because the key
+      # changes whenever the server is rebuilt and a stale one in git would be
+      # worse than none.
+      - name: Bake the bootstrap relay
+        shell: bash
+        env:
+          RENDEZVOUS_KEY: ${{ secrets.NKS_RENDEZVOUS_KEY }}
+        run: |
+          CFG=flutter/android/app/src/main/res/values/nks_config.xml
+          python3 - "$CFG" "${{ inputs.rendezvous_server }}" "$RENDEZVOUS_KEY" <<'PY'
+          import sys, xml.sax.saxutils as x
+          path, server, key = sys.argv[1], sys.argv[2], sys.argv[3]
+          src = open(path, encoding="utf-8").read()
+          for name, value in (("nks_default_rendezvous_server", server),
+                              ("nks_default_rendezvous_key", key)):
+              src = src.replace(f'<string name="{name}"></string>',
+                                f'<string name="{name}">{x.escape(value)}</string>')
+          open(path, "w", encoding="utf-8").write(src)
+          PY
+          # Server only. The key is a secret and must not be echoed, masking or not.
+          grep -n "nks_default_rendezvous_server" "$CFG"
+          if grep -q '"nks_default_rendezvous_key"></string>' "$CFG"; then
+            echo "bootstrap key: NOT set (client will not pin until the agent pushes one)"
+          else
+            echo "bootstrap key: set"
+          fi
 
       - name: Install flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
