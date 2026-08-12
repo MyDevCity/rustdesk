@@ -21,6 +21,15 @@ on:
         type: choice
         default: aarch64
         options: [aarch64, armv7, x86_64]
+      channel:
+        description: "Release channel to publish under"
+        type: choice
+        default: beta
+        options: [beta, production]
+      publish:
+        description: "Upload to the NKS download CDN"
+        type: boolean
+        default: false
 
 env:
   RUST_VERSION: "1.75"
@@ -42,6 +51,12 @@ jobs:
     needs: [generate-bridge]
     name: build rustdesk android apk ${{ inputs.arch }}
     runs-on: ubuntu-24.04
+    # The NKS publish role only trusts this repo's `release` environment, so a
+    # publishing run enters it; a plain build does not.
+    environment: ${{ inputs.publish && 'release' || null }}
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Free Disk Space (Ubuntu)
         uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
@@ -217,3 +232,25 @@ jobs:
         with:
           name: nks-remote-${{ env.VERSION }}-${{ inputs.arch }}
           path: out/*.apk
+
+      # --- publish to the NKS download CDN -----------------------------------
+      # Same bucket and <channel>/<os>/ layout as the POS installers; the agent
+      # installs this APK on managed terminals.
+      - name: Configure AWS credentials
+        if: inputs.publish
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_PUBLISH_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Publish
+        if: inputs.publish
+        env:
+          BUCKET: ${{ secrets.POS_DOWNLOAD_BUCKET }}
+          DIST: ${{ secrets.POS_DOWNLOAD_DISTRIBUTION_ID }}
+        run: |
+          KEY="${{ inputs.channel }}/android/NKS-Remote-${{ inputs.arch }}.apk"
+          aws s3 cp out/nks-remote-${{ env.VERSION }}-${{ inputs.arch }}.apk \
+            "s3://$BUCKET/$KEY" --content-type application/vnd.android.package-archive
+          aws cloudfront create-invalidation --distribution-id "$DIST" --paths "/$KEY"
+          echo "Published https://get.nkspos.com/$KEY" >> $GITHUB_STEP_SUMMARY
