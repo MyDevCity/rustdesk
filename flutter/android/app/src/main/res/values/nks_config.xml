@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Bootstrap relay, substituted at build time by .github/workflows/nks-android.yml.
+
+  Empty here on purpose: the platform is the authority on server identity and
+  pushes it over managed configuration, so a value committed to the repo would go
+  stale the first time the server is rebuilt. These only cover the window before
+  the managing agent's first push, when the client would otherwise register with
+  RustDesk's public servers.
+-->
+<resources>
+    <string name="nks_default_rendezvous_server"></string>
+    <string name="nks_default_rendezvous_key"></string>
+</resources>
