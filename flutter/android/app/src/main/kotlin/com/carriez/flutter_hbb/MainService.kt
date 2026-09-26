@@ -16,6 +16,7 @@ import android.app.PendingIntent.FLAG_IMMUTABLE
 import android.app.PendingIntent.FLAG_UPDATE_CURRENT
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.content.res.Configuration.ORIENTATION_LANDSCAPE
@@ -246,9 +247,26 @@ class MainService : Service() {
         FFI.startServer(configPath, "")
 
         createForegroundNotification()
+
+        // Android delivers APPLICATION_RESTRICTIONS_CHANGED only to receivers
+        // registered at runtime, never to the one in the manifest — so without
+        // this a password the managing agent pushes while the service is
+        // running is never applied, and the dashboard hands out a password the
+        // terminal does not have. Also apply what is already there, in case the
+        // push landed while nothing was listening (after a reboot, say).
+        ContextCompat.registerReceiver(
+            this,
+            managedConfigReceiver,
+            IntentFilter(Intent.ACTION_APPLICATION_RESTRICTIONS_CHANGED),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        NksManagedConfig.applyWhenReady(this)
     }
 
+    private val managedConfigReceiver = NksManagedConfigReceiver()
+
     override fun onDestroy() {
+        runCatching { unregisterReceiver(managedConfigReceiver) }
         checkMediaPermission()
         stopService(Intent(this, FloatingWindowService::class.java))
         super.onDestroy()
