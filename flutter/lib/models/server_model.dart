@@ -349,7 +349,7 @@ class ServerModel with ChangeNotifier {
       await showClientsMayNotBeChangedAlert(parent.target);
     }
     if (_inputOk) {
-      parent.target?.invokeMethod("stop_input");
+      if (await parent.target?.invokeMethod("stop_input") == false) return;
       bind.mainSetOption(key: kOptionEnableKeyboard, value: 'N');
     } else {
       if (parent.target != null) {
