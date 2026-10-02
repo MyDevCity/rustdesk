@@ -25,7 +25,7 @@ on:
         description: "Release channel to publish under"
         type: choice
         default: beta
-        options: [beta, production]
+        options: [dev, beta, production]
       publish:
         description: "Upload to the NKS download CDN"
         type: boolean
