@@ -151,6 +151,10 @@ class MainActivity : FlutterActivity() {
                     }
                 }
                 "stop_service" -> {
+                    if (NksManagedService.isManaged(context)) {
+                        result.success(false)
+                        return@setMethodCallHandler
+                    }
                     Log.d(logTag, "Stop service")
                     mainService?.let {
                         it.destroy()
@@ -201,6 +205,10 @@ class MainActivity : FlutterActivity() {
                     result.success(true)
                 }
                 "stop_input" -> {
+                    if (NksManagedService.isManaged(context)) {
+                        result.success(false)
+                        return@setMethodCallHandler
+                    }
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                         InputService.ctx?.disableSelf()
                     } else {
@@ -239,6 +247,10 @@ class MainActivity : FlutterActivity() {
                     result.success(prefs.getBoolean(KEY_START_ON_BOOT_OPT, false))
                 }
                 SET_START_ON_BOOT_OPT -> {
+                    if (NksManagedService.isManaged(context) && call.arguments == false) {
+                        result.success(false)
+                        return@setMethodCallHandler
+                    }
                     if (call.arguments is Boolean) {
                         val prefs = getSharedPreferences(KEY_SHARED_PREFERENCES, MODE_PRIVATE)
                         val edit = prefs.edit()

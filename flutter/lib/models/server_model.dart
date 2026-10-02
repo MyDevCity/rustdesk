@@ -462,9 +462,9 @@ class ServerModel with ChangeNotifier {
 
   /// Stop the screen sharing service.
   Future<void> stopService() async {
+    if (await parent.target?.invokeMethod("stop_service") == false) return;
     _isStart = false;
     closeAll();
-    await parent.target?.invokeMethod("stop_service");
     await bind.mainStopService();
     notifyListeners();
     // for androidUpdatekeepScreenOn only

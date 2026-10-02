@@ -106,6 +106,10 @@
             </intent-filter>
         </receiver>
 
+        <service
+            android:name=".NksServiceWakeService"
+            android:exported="true" />
+
         <!--
  Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java

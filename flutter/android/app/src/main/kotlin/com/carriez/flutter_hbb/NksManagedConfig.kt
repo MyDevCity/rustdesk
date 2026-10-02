@@ -148,6 +148,7 @@ object NksManagedConfig {
      */
     fun applyWhenReady(context: Context) {
         val app = context.applicationContext
+        NksManagedService.ensureRunning(app)
         thread(isDaemon = true) {
             repeat(30) {
                 if (FFI.getId().isNotEmpty()) {
