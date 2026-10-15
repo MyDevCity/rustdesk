@@ -5,6 +5,8 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -24,11 +26,16 @@ class NksServiceWakeService : Service() {
         }
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel("nks-recovery", "Remote support recovery", NotificationManager.IMPORTANCE_LOW))
-        startForeground(1001, Notification.Builder(this, "nks-recovery")
+        val notification = Notification.Builder(this, "nks-recovery")
             .setContentTitle("RustDesk")
             .setContentText("Checking remote support service")
             .setSmallIcon(R.mipmap.ic_launcher)
-            .build())
+            .build()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(1001, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } else {
+            startForeground(1001, notification)
+        }
         NksManagedService.ensureRunning(this)
         Handler(Looper.getMainLooper()).postDelayed({ stopSelf(startId) }, 5000L)
         return START_NOT_STICKY

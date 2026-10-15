@@ -116,7 +116,12 @@
 
         <service
             android:name=".NksServiceWakeService"
-            android:exported="true" />
+            android:exported="true"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="@string/foreground_service_special_use_subtype" />
+        </service>
 
         <!--
  Don't delete the meta-data below.
