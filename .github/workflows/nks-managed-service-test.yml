@@ -1,0 +1,28 @@
+name: NKS managed service test
+
+on:
+  pull_request:
+    paths:
+      - "flutter/android/app/src/main/kotlin/com/carriez/flutter_hbb/Nks*"
+      - "flutter/android/tests/managed-service/**"
+      - ".github/workflows/nks-managed-service-test.yml"
+  workflow_call:
+
+jobs:
+  managed-service-test:
+    name: managed service regression
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Run tests/managed-service
+        run: |
+          curl -fsSL -o /tmp/kotlin.zip https://github.com/JetBrains/kotlin/releases/download/v2.1.20/kotlin-compiler-2.1.20.zip
+          unzip -q /tmp/kotlin.zip -d /tmp
+          APP=flutter/android/app/src/main/kotlin/com/carriez/flutter_hbb
+          /tmp/kotlinc/bin/kotlinc flutter/android/tests/managed-service/*.kt \
+            $APP/NksManagedService.kt $APP/NksServiceWakeService.kt -d /tmp/managed-service
+          /tmp/kotlinc/bin/kotlin -cp /tmp/managed-service com.carriez.flutter_hbb.ReproKt
