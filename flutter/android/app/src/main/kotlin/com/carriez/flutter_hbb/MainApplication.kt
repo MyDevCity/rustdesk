@@ -11,6 +11,7 @@ class MainApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        NksDiagnostics.installCrashRecorder(this)
         Log.d(TAG, "App start")
         FFI.onAppStart(applicationContext)
     }
