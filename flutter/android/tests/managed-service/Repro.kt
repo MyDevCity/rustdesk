@@ -58,7 +58,10 @@ fun main() {
     check(wakeWith(ensure("test-nonce"), 3) == listOf("foreground", "stop 3")) { "A wake while sharing must enter the foreground before it stops" }
     check(wake.preferences.flags.isEmpty() && wake.starts.isEmpty()) { "A wake while sharing must leave the running service alone" }
     MainService.isReady = false
+    SystemClock.now += 31_000L
     check(wakeWith(ensure("test-nonce"), 4) == listOf("foreground", "stop 4")) { "A recovery wake must enter the foreground" }
     check(wake.starts.size == 1) { "A recovery wake must restart the stopped service" }
+    wake.foregroundDenied = true
+    check(wakeWith(ensure("wrong-nonce"), 5) == listOf("stop 5")) { "A refused foreground start must not crash a rejected wake" }
     println("PASS: stopped-service recovery, consent, authentication, startup, retry, revocation, and foreground wakes")
 }

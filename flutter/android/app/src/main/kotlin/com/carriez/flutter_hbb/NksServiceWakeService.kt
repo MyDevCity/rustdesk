@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.util.Log
 
 class NksServiceWakeService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
@@ -19,11 +20,13 @@ class NksServiceWakeService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(NotificationChannel("nks-recovery", "Remote support recovery", NotificationManager.IMPORTANCE_LOW))
-            startForeground(1001, Notification.Builder(this, "nks-recovery")
-                .setContentTitle("RustDesk")
-                .setContentText("Checking remote support service")
-                .setSmallIcon(R.mipmap.ic_launcher)
-                .build())
+            runCatching {
+                startForeground(1001, Notification.Builder(this, "nks-recovery")
+                    .setContentTitle("RustDesk")
+                    .setContentText("Checking remote support service")
+                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .build())
+            }.onFailure { Log.w("NksServiceWakeService", "Android refused the foreground start: ${it.message}") }
         }
         if (intent?.action != NksManagedService.ACTION_ENSURE_SERVICE ||
             !NksManagedService.acceptsWake(this, intent.getStringExtra("nonce")) ||

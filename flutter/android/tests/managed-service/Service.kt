@@ -21,9 +21,13 @@ class NotificationManager {
 
 abstract class Service : Context() {
     val events = mutableListOf<String>()
+    var foregroundDenied = false
     abstract fun onBind(intent: Intent?): IBinder?
     abstract fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int
-    fun startForeground(id: Int, notification: Notification) { events += "foreground" }
+    fun startForeground(id: Int, notification: Notification) {
+        check(!foregroundDenied) { "ForegroundServiceStartNotAllowedException" }
+        events += "foreground"
+    }
     fun stopSelf(startId: Int) { events += "stop $startId" }
     companion object { const val START_NOT_STICKY = 2 }
 }
