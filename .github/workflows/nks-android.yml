@@ -51,8 +51,11 @@ jobs:
   generate-bridge:
     uses: ./.github/workflows/bridge.yml
 
+  managed-service-test:
+    uses: ./.github/workflows/nks-managed-service-test.yml
+
   build-android:
-    needs: [generate-bridge]
+    needs: [generate-bridge, managed-service-test]
     name: build rustdesk android apk ${{ inputs.arch }}
     runs-on: ubuntu-24.04
     # The NKS publish role only trusts this repo's `release` environment, so a
