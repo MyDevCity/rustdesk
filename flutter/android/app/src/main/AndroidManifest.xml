@@ -110,7 +110,6 @@
             android:name=".NksServiceWakeService"
             android:exported="true" />
 
-        <!-- Exported for the managing agent; the managed-config nonce authenticates it. -->
         <receiver
             android:name=".NksDiagnosticsReceiver"
             android:exported="true">

@@ -16,6 +16,7 @@ import android.provider.Settings
 import android.util.Log
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.IOException
 import java.io.InputStream
 import java.io.RandomAccessFile
 import java.text.SimpleDateFormat
@@ -27,9 +28,8 @@ import kotlin.concurrent.schedule
 import kotlin.concurrent.thread
 
 /**
- * Answers the managing agent's `collect_logs` command. Another app cannot read
- * this app's logcat, exit history, or private files, so RustDesk collects its
- * own and sends them back as one gzipped text report.
+ * Another app cannot read this app's logcat, exit history, or private files,
+ * so RustDesk collects its own and sends them back as one gzipped text report.
  */
 object NksDiagnostics {
     private const val TAG = "NksDiagnostics"
@@ -68,6 +68,7 @@ object NksDiagnostics {
         val reportTo = policy.getString(NksManagedConfig.KEY_REPORT_TO).orEmpty()
         @Suppress("DEPRECATION")
         val secrets = policy.keySet().mapNotNull { policy.get(it) as? String }.filter { it.isNotBlank() }
+            .sortedByDescending { it.length }
         val report = report(context, secrets)
         context.sendBroadcast(Intent(ACTION_REPORT).apply {
             setPackage(reportTo)
@@ -171,12 +172,16 @@ object NksDiagnostics {
         val process = Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-v", "threadtime", "-t", "3000"))
         val timeout = Timer(true)
         timeout.schedule(5000L) { process.destroy() }
+        val lines = mutableListOf<String>()
         try {
-            return process.inputStream.bufferedReader().readLines()
+            process.inputStream.bufferedReader().forEachLine { lines += it }
+        } catch (e: IOException) {
+            lines += "logcat stopped: ${e.message}"
         } finally {
             timeout.cancel()
             process.destroy()
         }
+        return lines
     }
 
     private fun InputStream.head(limit: Int): String {
