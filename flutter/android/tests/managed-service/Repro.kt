@@ -63,5 +63,8 @@ fun main() {
     check(wake.starts.size == 1) { "A recovery wake must restart the stopped service" }
     wake.foregroundDenied = true
     check(wakeWith(ensure("wrong-nonce"), 5) == listOf("stop 5")) { "A refused foreground start must not crash a rejected wake" }
+    SystemClock.now += 31_000L
+    check(wakeWith(ensure("test-nonce"), 6) == listOf("stop 6")) { "A refused foreground start must not crash a recovery wake" }
+    check(wake.starts.size == 2) { "A recovery wake must restart the service even when the foreground start is refused" }
     println("PASS: stopped-service recovery, consent, authentication, startup, retry, revocation, and foreground wakes")
 }

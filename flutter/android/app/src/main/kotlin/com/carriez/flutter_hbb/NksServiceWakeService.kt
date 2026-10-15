@@ -26,7 +26,7 @@ class NksServiceWakeService : Service() {
                     .setContentText("Checking remote support service")
                     .setSmallIcon(R.mipmap.ic_launcher)
                     .build())
-            }.onFailure { Log.w("NksServiceWakeService", "Android refused the foreground start: ${it.message}") }
+            }.onFailure { Log.w("NksServiceWakeService", "Android refused the foreground start", it) }
         }
         if (intent?.action != NksManagedService.ACTION_ENSURE_SERVICE ||
             !NksManagedService.acceptsWake(this, intent.getStringExtra("nonce")) ||
