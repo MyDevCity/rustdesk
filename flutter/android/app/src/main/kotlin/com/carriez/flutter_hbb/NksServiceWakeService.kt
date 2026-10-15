@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -20,12 +21,17 @@ class NksServiceWakeService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(NotificationChannel("nks-recovery", "Remote support recovery", NotificationManager.IMPORTANCE_LOW))
+            val notification = Notification.Builder(this, "nks-recovery")
+                .setContentTitle("RustDesk")
+                .setContentText("Checking remote support service")
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .build()
             runCatching {
-                startForeground(1001, Notification.Builder(this, "nks-recovery")
-                    .setContentTitle("RustDesk")
-                    .setContentText("Checking remote support service")
-                    .setSmallIcon(R.mipmap.ic_launcher)
-                    .build())
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    startForeground(1001, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+                } else {
+                    startForeground(1001, notification)
+                }
             }.onFailure { Log.w("NksServiceWakeService", "Android refused the foreground start", it) }
         }
         if (intent?.action != NksManagedService.ACTION_ENSURE_SERVICE ||

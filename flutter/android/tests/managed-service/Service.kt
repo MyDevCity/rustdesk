@@ -28,6 +28,7 @@ abstract class Service : Context() {
         check(!foregroundDenied) { "ForegroundServiceStartNotAllowedException" }
         events += "foreground"
     }
+    fun startForeground(id: Int, notification: Notification, type: Int) = startForeground(id, notification)
     fun stopSelf(startId: Int) { events += "stop $startId" }
     companion object { const val START_NOT_STICKY = 2 }
 }

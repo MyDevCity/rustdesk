@@ -13,7 +13,7 @@ class Handler(looper: Looper) {
 interface IBinder
 object Build {
     object VERSION { const val SDK_INT = 33 }
-    object VERSION_CODES { const val O = 26 }
+    object VERSION_CODES { const val O = 26; const val UPSIDE_DOWN_CAKE = 34 }
 }
 object Process { fun myUid() = 10160 }
 object SystemClock {
