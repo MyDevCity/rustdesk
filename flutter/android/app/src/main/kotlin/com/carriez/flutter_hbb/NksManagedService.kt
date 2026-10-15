@@ -15,7 +15,7 @@ object NksManagedService {
     const val ACTION_ENSURE_SERVICE = "com.nkspos.uem.ENSURE_REMOTE_SERVICE"
     private var lastStartAt = 0L
 
-    private fun restrictions(context: Context): Bundle? = runCatching {
+    fun restrictions(context: Context): Bundle? = runCatching {
         (context.getSystemService(Context.RESTRICTIONS_SERVICE) as RestrictionsManager).applicationRestrictions
     }.getOrNull()
 

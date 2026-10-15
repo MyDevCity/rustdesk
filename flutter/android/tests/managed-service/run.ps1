@@ -22,8 +22,9 @@ $taskJars = @($taskDependencies | ForEach-Object {
 $taskClasspath = $taskJars -join ';'
 $taskOutput = Join-Path $env:TEMP 'nks-managed-service-test'
 $taskSources = @(Get-ChildItem $PSScriptRoot -Filter '*.kt' | Select-Object -ExpandProperty FullName)
-$taskService = Join-Path $PSScriptRoot '../../app/src/main/kotlin/com/carriez/flutter_hbb/NksManagedService.kt'
-& $taskJava -cp $taskClasspath org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -no-stdlib -no-reflect -classpath $taskClasspath -d $taskOutput @taskSources $taskService
+$taskApp = Join-Path $PSScriptRoot '../../app/src/main/kotlin/com/carriez/flutter_hbb'
+$taskServices = @('NksManagedService.kt', 'NksServiceWakeService.kt' | ForEach-Object { Join-Path $taskApp $_ })
+& $taskJava -cp $taskClasspath org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -no-stdlib -no-reflect -classpath $taskClasspath -d $taskOutput @taskSources @taskServices
 if ($LASTEXITCODE -ne 0) { throw 'Managed service test compilation failed.' }
 & $taskJava -cp "$taskOutput;$taskClasspath" com.carriez.flutter_hbb.ReproKt
 if ($LASTEXITCODE -ne 0) { throw 'Managed service regression failed.' }

@@ -123,6 +123,14 @@
                 android:value="@string/foreground_service_special_use_subtype" />
         </service>
 
+        <receiver
+            android:name=".NksDiagnosticsReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.nkspos.uem.COLLECT_REMOTE_DIAGNOSTICS" />
+            </intent-filter>
+        </receiver>
+
         <!--
  Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java

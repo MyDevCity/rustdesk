@@ -5,3 +5,4 @@ const val KEY_START_ON_BOOT_OPT = "start_on_boot"
 const val ACT_INIT_MEDIA_PROJECTION_AND_SERVICE = "init_media"
 const val EXT_INIT_FROM_BOOT = "from_boot"
 class MainService { companion object { var isReady = false } }
+object R { object mipmap { const val ic_launcher = 1 } }
