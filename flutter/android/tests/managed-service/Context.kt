@@ -1,6 +1,7 @@
 package android.content
 
 import android.app.AppOpsManager
+import android.app.NotificationManager
 import android.os.Bundle
 
 class RestrictionsManager(val applicationRestrictions: Bundle)
@@ -12,15 +13,19 @@ class Preferences {
     fun apply() {}
 }
 
-class Intent(context: Context, target: Class<*>) {
-    var action: String? = null
+class Intent(var action: String?) {
+    constructor(context: Context, target: Class<*>) : this(null)
     val flags = mutableMapOf<String, Boolean>()
+    val strings = mutableMapOf<String, String>()
     fun putExtra(key: String, value: Boolean) = apply { flags[key] = value }
+    fun putExtra(key: String, value: String) = apply { strings[key] = value }
+    fun getStringExtra(key: String) = strings[key]
 }
 
-class Context {
+open class Context {
     val policy = Bundle()
     val appOps = AppOpsManager()
+    val notifications = NotificationManager()
     val preferences = Preferences()
     val starts = mutableListOf<Intent>()
     var failStart = false
@@ -31,6 +36,8 @@ class Context {
         APP_OPS_SERVICE -> appOps
         else -> error(name)
     }
+    @Suppress("UNCHECKED_CAST")
+    fun <T> getSystemService(type: Class<T>): T = notifications as T
     fun getSharedPreferences(name: String, mode: Int) = preferences
     fun startForegroundService(intent: Intent) {
         check(!failStart) { "Background start denied" }

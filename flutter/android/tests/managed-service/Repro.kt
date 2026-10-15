@@ -1,6 +1,7 @@
 package com.carriez.flutter_hbb
 
 import android.content.Context
+import android.content.Intent
 import android.os.SystemClock
 
 fun main() {
@@ -41,5 +42,23 @@ fun main() {
     SystemClock.now += 31_000L
     NksManagedService.ensureRunning(context)
     check(context.starts.size == 3) { "Management revocation must stop recovery" }
-    println("PASS: stopped-service recovery, consent, authentication, startup, retry, and revocation")
+
+    val wake = NksServiceWakeService()
+    wake.policy.values += mapOf("serviceEnabled" to true, "reportTo" to "com.nkspos.uem", "nonce" to "test-nonce")
+    wake.appOps.mode = 0
+    fun wakeWith(intent: Intent?, startId: Int): List<String> {
+        wake.events.clear()
+        wake.onStartCommand(intent, 0, startId)
+        return wake.events.toList()
+    }
+    fun ensure(nonce: String) = Intent(NksManagedService.ACTION_ENSURE_SERVICE).putExtra("nonce", nonce)
+    check(wakeWith(ensure("wrong-nonce"), 1) == listOf("foreground", "stop 1")) { "A rejected wake must enter the foreground before it stops, or Android kills the app" }
+    check(wakeWith(null, 2) == listOf("foreground", "stop 2")) { "A wake without an intent must enter the foreground before it stops" }
+    MainService.isReady = true
+    check(wakeWith(ensure("test-nonce"), 3) == listOf("foreground", "stop 3")) { "A wake while sharing must enter the foreground before it stops" }
+    check(wake.preferences.flags.isEmpty() && wake.starts.isEmpty()) { "A wake while sharing must leave the running service alone" }
+    MainService.isReady = false
+    check(wakeWith(ensure("test-nonce"), 4) == listOf("foreground", "stop 4")) { "A recovery wake must enter the foreground" }
+    check(wake.starts.size == 1) { "A recovery wake must restart the stopped service" }
+    println("PASS: stopped-service recovery, consent, authentication, startup, retry, revocation, and foreground wakes")
 }
