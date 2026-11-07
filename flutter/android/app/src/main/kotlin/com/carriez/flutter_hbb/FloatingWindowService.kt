@@ -198,18 +198,11 @@ class FloatingWindowService : Service(), View.OnTouchListener {
         // untouchable
         viewUntouchable = FFI.getLocalOption("floating-window-untouchable") == "Y"
         // transparency
-        FFI.getLocalOption("floating-window-transparency").let {
-            if (it.isNotEmpty()) {
-                try {
-                    val transparency = it.toInt()
-                    if (transparency in 0..10) {
-                        viewTransparency = transparency * 1f / 10
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-        }
+        // NKS: always invisible. The icon sat on top of the POS screen. The
+        // window stays, so it still keeps the screen on during a session and
+        // keeps the service from being killed. Transparency 0 also makes it
+        // untouchable, so taps go through to the POS app.
+        viewTransparency = 0f
         // custom svg
         FFI.getLocalOption("floating-window-svg").let {
             if (it.isNotEmpty()) {
